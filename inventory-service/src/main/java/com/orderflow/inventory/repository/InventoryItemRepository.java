@@ -30,7 +30,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
     @Query("""
             UPDATE InventoryItem i
                SET i.availableQuantity = i.availableQuantity - :qty,
-                   i.reservedQuantity  = i.reservedQuantity  + :qty
+                   i.reservedQuantity  = i.reservedQuantity  + :qty,
+                   i.updatedAt         = CURRENT_TIMESTAMP
              WHERE i.sku = :sku
                AND i.availableQuantity >= :qty
             """)
@@ -44,7 +45,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
     @Modifying(flushAutomatically = true)
     @Query("""
             UPDATE InventoryItem i
-               SET i.reservedQuantity = i.reservedQuantity - :qty
+               SET i.reservedQuantity = i.reservedQuantity - :qty,
+                   i.updatedAt        = CURRENT_TIMESTAMP
              WHERE i.sku = :sku
                AND i.reservedQuantity >= :qty
             """)
@@ -58,7 +60,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
     @Query("""
             UPDATE InventoryItem i
                SET i.availableQuantity = i.availableQuantity + :qty,
-                   i.reservedQuantity  = i.reservedQuantity  - :qty
+                   i.reservedQuantity  = i.reservedQuantity  - :qty,
+                   i.updatedAt         = CURRENT_TIMESTAMP
              WHERE i.sku = :sku
                AND i.reservedQuantity >= :qty
             """)
