@@ -1,0 +1,29 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+order:
+  reconciler:
+    # The reconciler is invoked explicitly from tests, never on a timer.
+    enabled: false
+
+# Tighter timings so resilience tests finish quickly.
+resilience4j:
+  retry:
+    instances:
+      inventory:
+        max-attempts: 2
+        wait-duration: 50ms
+  circuitbreaker:
+    instances:
+      inventory:
+        minimum-number-of-calls: 3
+        sliding-window-size: 4
+        wait-duration-in-open-state: 1s
+
+logging:
+  level:
+    com.orderflow.order: INFO
+    com.github.tomakehurst.wiremock: WARN
