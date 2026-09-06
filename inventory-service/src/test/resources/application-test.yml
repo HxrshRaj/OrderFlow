@@ -1,0 +1,19 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+
+inventory:
+  reservation:
+    ttl: PT15M
+    # The background sweeper is driven explicitly from tests; never let it run on a timer here.
+    sweep-enabled: false
+    adjust-max-retries: 5
+
+logging:
+  level:
+    com.orderflow.inventory: INFO
+    org.testcontainers: INFO
