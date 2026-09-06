@@ -1,0 +1,43 @@
+# ===== Build output =====
+target/
+build/
+dist/
+dist-ssr/
+
+# ===== Java =====
+*.class
+hs_err_pid*
+replay_pid*
+HELP.md
+
+# ===== Node =====
+node_modules/
+.vite/
+coverage/
+*.local
+
+# ===== Environment =====
+.env
+.env.*
+!.env.example
+
+# ===== IDE / editors =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+*.swo
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Claude Code local overrides =====
+.claude/settings.local.json
