@@ -1,0 +1,20 @@
+# Normalise line endings: store everything as LF in the repository.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# The Maven wrapper shell script must be LF even on Windows checkouts
+# (it runs inside the Linux build container).
+mvnw text eol=lf
+gradlew text eol=lf
+
+# Binary files git must not touch.
+*.jar binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
