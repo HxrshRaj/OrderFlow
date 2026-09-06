@@ -1,0 +1,279 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "OrderFlow Order Service API",
+        "description": "Coordinates the order lifecycle: PLACED -> CONFIRMED -> SHIPPED, with\nREJECTED and CANCELLED terminal states.\n\nPlacing an order holds stock in the Inventory Service via an idempotent,\nresilient reservation call (timeout + retry + circuit breaker). If Inventory\ncannot be reached the order stays PLACED and a background reconciler retries.",
+        "license": {
+            "name": "MIT"
+        },
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8080",
+            "description": "Generated server url"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Orders",
+            "description": "Order lifecycle"
+        }
+    ],
+    "paths": {
+        "/api/v1/orders": {
+            "get": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "List a customer's orders, newest first",
+                "operationId": "listForCustomer",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/OrderResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Place an order",
+                "description": "Always returns 201 with the created order. Inspect `status`: CONFIRMED (stock held), REJECTED (`rejectionReason` explains the shortfall), or PLACED (Inventory was unreachable; the reconciler will retry).",
+                "operationId": "place",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlaceOrderRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{orderNumber}/ship": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Ship a CONFIRMED order (commits the stock reservation)",
+                "operationId": "ship",
+                "parameters": [
+                    {
+                        "name": "orderNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{orderNumber}/cancel": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Cancel a PLACED or CONFIRMED order (releases any stock hold)",
+                "operationId": "cancel",
+                "parameters": [
+                    {
+                        "name": "orderNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{orderNumber}": {
+            "get": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get an order by its number",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "orderNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "OrderLineRequest": {
+                "required": [
+                    "sku",
+                    "unitPrice"
+                ],
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "unitPrice": {
+                        "type": "number"
+                    }
+                }
+            },
+            "PlaceOrderRequest": {
+                "required": [
+                    "customerId",
+                    "lines"
+                ],
+                "type": "object",
+                "properties": {
+                    "customerId": {
+                        "type": "string"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OrderLineRequest"
+                        }
+                    }
+                }
+            },
+            "OrderItemResponse": {
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "unitPrice": {
+                        "type": "number"
+                    },
+                    "lineTotal": {
+                        "type": "number"
+                    }
+                }
+            },
+            "OrderResponse": {
+                "type": "object",
+                "properties": {
+                    "orderNumber": {
+                        "type": "string"
+                    },
+                    "reservationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "customerId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "rejectionReason": {
+                        "type": "string"
+                    },
+                    "totalAmount": {
+                        "type": "number"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OrderItemResponse"
+                        }
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            }
+        }
+    }
+}

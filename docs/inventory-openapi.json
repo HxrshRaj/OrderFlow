@@ -1,0 +1,414 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "OrderFlow Inventory Service API",
+        "description": "Tracks stock levels and issues concurrency-safe reservations (holds).\n\nReservation lifecycle: CONFIRMED -> COMMITTED (order shipped) or RELEASED\n(order cancelled / failed / hold expired). The POST /api/v1/reservations\nendpoint is idempotent on `reservationId` and atomic across all lines.",
+        "license": {
+            "name": "MIT"
+        },
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8081",
+            "description": "Generated server url"
+        }
+    ],
+    "tags": [
+        {
+            "name": "Inventory",
+            "description": "Stock catalogue and admin restock"
+        },
+        {
+            "name": "Reservations",
+            "description": "Concurrency-safe stock holds for orders"
+        }
+    ],
+    "paths": {
+        "/api/v1/reservations": {
+            "post": {
+                "tags": [
+                    "Reservations"
+                ],
+                "summary": "Hold stock for an order",
+                "description": "Idempotent on reservationId. Atomic across all lines: if any line cannot be held, nothing is held and 409 is returned with per-SKU shortfalls.",
+                "operationId": "reserve",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReserveRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReservationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reservations/{reservationId}/release": {
+            "post": {
+                "tags": [
+                    "Reservations"
+                ],
+                "summary": "Return a hold to available stock (order cancelled / failed)",
+                "operationId": "release",
+                "parameters": [
+                    {
+                        "name": "reservationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReservationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reservations/{reservationId}/commit": {
+            "post": {
+                "tags": [
+                    "Reservations"
+                ],
+                "summary": "Convert a hold into a physical stock deduction (order shipped)",
+                "operationId": "commit",
+                "parameters": [
+                    {
+                        "name": "reservationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReservationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory": {
+            "get": {
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "List all stock items",
+                "operationId": "list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/InventoryItemResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Create a stock item",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateInventoryItemRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventoryItemResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/{sku}": {
+            "get": {
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Get one stock item by SKU",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "sku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventoryItemResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Inventory"
+                ],
+                "summary": "Restock or correct a stock item (optimistic-locked, retried on conflict)",
+                "operationId": "adjust",
+                "parameters": [
+                    {
+                        "name": "sku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdjustStockRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InventoryItemResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reservations/{reservationId}": {
+            "get": {
+                "tags": [
+                    "Reservations"
+                ],
+                "summary": "Get a reservation's current state",
+                "operationId": "get_1",
+                "parameters": [
+                    {
+                        "name": "reservationId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReservationResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ReserveLineRequest": {
+                "required": [
+                    "sku"
+                ],
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "ReserveRequest": {
+                "required": [
+                    "lines",
+                    "reservationId"
+                ],
+                "type": "object",
+                "properties": {
+                    "reservationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReserveLineRequest"
+                        }
+                    }
+                }
+            },
+            "ReservationLineResponse": {
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "ReservationResponse": {
+                "type": "object",
+                "properties": {
+                    "reservationId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ReservationLineResponse"
+                        }
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "replayed": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CreateInventoryItemRequest": {
+                "required": [
+                    "name",
+                    "sku"
+                ],
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "maxLength": 64,
+                        "minLength": 0,
+                        "type": "string"
+                    },
+                    "name": {
+                        "maxLength": 255,
+                        "minLength": 0,
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "InventoryItemResponse": {
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "availableQuantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "reservedQuantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "onHandQuantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "AdjustStockRequest": {
+                "type": "object",
+                "properties": {
+                    "quantityDelta": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            }
+        }
+    }
+}
