@@ -1,11 +1,14 @@
 server:
-  port: 8081
+  # Render (and most PaaS) inject the port to bind as $PORT.
+  port: ${PORT:8081}
 
 spring:
   application:
     name: inventory-service
   datasource:
-    url: ${INVENTORY_DB_URL:jdbc:postgresql://localhost:5432/inventory_db}
+    # A full INVENTORY_DB_URL wins (docker-compose sets it directly). Otherwise the URL is
+    # assembled from discrete parts, which is what a managed-Postgres provider hands you.
+    url: ${INVENTORY_DB_URL:jdbc:postgresql://${INVENTORY_DB_HOST:localhost}:${INVENTORY_DB_PORT:5432}/${INVENTORY_DB_NAME:inventory_db}?sslmode=${INVENTORY_DB_SSLMODE:prefer}}
     username: ${INVENTORY_DB_USER:inventory}
     password: ${INVENTORY_DB_PASSWORD:inventory}
     hikari:

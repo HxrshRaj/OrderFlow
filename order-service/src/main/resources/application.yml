@@ -1,11 +1,14 @@
 server:
-  port: 8080
+  # Render (and most PaaS) inject the port to bind as $PORT.
+  port: ${PORT:8080}
 
 spring:
   application:
     name: order-service
   datasource:
-    url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5432/order_db}
+    # A full ORDER_DB_URL wins (docker-compose sets it directly). Otherwise the URL is
+    # assembled from discrete parts, which is what a managed-Postgres provider hands you.
+    url: ${ORDER_DB_URL:jdbc:postgresql://${ORDER_DB_HOST:localhost}:${ORDER_DB_PORT:5432}/${ORDER_DB_NAME:order_db}?sslmode=${ORDER_DB_SSLMODE:prefer}}
     username: ${ORDER_DB_USER:orders}
     password: ${ORDER_DB_PASSWORD:orders}
     hikari:
@@ -22,7 +25,9 @@ spring:
     locations: classpath:db/migration
 
 inventory:
-  base-url: ${INVENTORY_BASE_URL:http://localhost:8081}
+  # docker-compose sets INVENTORY_BASE_URL directly. On a PaaS you typically get the peer's
+  # hostname without a scheme, so the URL can also be assembled from INVENTORY_SCHEME + host.
+  base-url: ${INVENTORY_BASE_URL:${INVENTORY_SCHEME:http}://${INVENTORY_HOST:localhost:8081}}
   connect-timeout: 500ms
   read-timeout: 2s
 
