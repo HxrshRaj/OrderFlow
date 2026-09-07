@@ -1,0 +1,99 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+#
+# Deploys the same repo as five Render resources:
+#   - two managed PostgreSQL instances  (one per service - the point of the project)
+#   - inventory-service, order-service  (Docker web services, bind $PORT)
+#   - web                               (nginx: serves the SPA, proxies /api/* to the two services)
+#
+# Cross-service wiring is resolved by Render: `fromDatabase` injects DB connection parts,
+# `fromService` injects each service's public hostname. No hostnames are hard-coded here.
+#
+# Notes:
+#   * Free Postgres instances expire after ~30 days and free web services cold-start (~50s).
+#     Bump `plan:` to `starter` for anything long-lived; the Maven image build may also need
+#     `starter` build resources.
+#   * After the first deploy, open http://<web-service>.onrender.com
+
+databases:
+  - name: orderflow-inventory-db
+    databaseName: inventory_db
+    user: inventory
+    plan: free
+    region: oregon
+
+  - name: orderflow-order-db
+    databaseName: order_db
+    user: orders
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: orderflow-inventory
+    runtime: docker
+    repo: https://github.com/HxrshRaj/OrderFlow
+    dockerfilePath: ./inventory-service/Dockerfile
+    dockerContext: ./inventory-service
+    plan: free
+    region: oregon
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      - key: INVENTORY_DB_HOST
+        fromDatabase: { name: orderflow-inventory-db, property: host }
+      - key: INVENTORY_DB_PORT
+        fromDatabase: { name: orderflow-inventory-db, property: port }
+      - key: INVENTORY_DB_NAME
+        fromDatabase: { name: orderflow-inventory-db, property: database }
+      - key: INVENTORY_DB_USER
+        fromDatabase: { name: orderflow-inventory-db, property: user }
+      - key: INVENTORY_DB_PASSWORD
+        fromDatabase: { name: orderflow-inventory-db, property: password }
+      - key: INVENTORY_DB_SSLMODE
+        value: require
+
+  - type: web
+    name: orderflow-order
+    runtime: docker
+    repo: https://github.com/HxrshRaj/OrderFlow
+    dockerfilePath: ./order-service/Dockerfile
+    dockerContext: ./order-service
+    plan: free
+    region: oregon
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      - key: ORDER_DB_HOST
+        fromDatabase: { name: orderflow-order-db, property: host }
+      - key: ORDER_DB_PORT
+        fromDatabase: { name: orderflow-order-db, property: port }
+      - key: ORDER_DB_NAME
+        fromDatabase: { name: orderflow-order-db, property: database }
+      - key: ORDER_DB_USER
+        fromDatabase: { name: orderflow-order-db, property: user }
+      - key: ORDER_DB_PASSWORD
+        fromDatabase: { name: orderflow-order-db, property: password }
+      - key: ORDER_DB_SSLMODE
+        value: require
+      - key: INVENTORY_SCHEME
+        value: https
+      - key: INVENTORY_HOST
+        fromService: { type: web, name: orderflow-inventory, property: host }
+
+  - type: web
+    name: orderflow-web
+    runtime: docker
+    repo: https://github.com/HxrshRaj/OrderFlow
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    region: oregon
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PROXY_SCHEME
+        value: https
+      - key: INVENTORY_UPSTREAM_HOST
+        fromService: { type: web, name: orderflow-inventory, property: host }
+      - key: ORDER_UPSTREAM_HOST
+        fromService: { type: web, name: orderflow-order, property: host }

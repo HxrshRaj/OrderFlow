@@ -183,6 +183,22 @@ cd order-service     && ./mvnw spring-boot:run     # :8080  (needs Inventory up)
 cd frontend          && npm install && npm run dev  # :5173, proxies /api/* to :8081 / :8080
 ```
 
+### On Render
+
+[`render.yaml`](render.yaml) is a Blueprint that provisions the whole system: two managed
+PostgreSQL instances (one per service), the two Spring services as Docker web services, and
+the nginx `web` service. In the Render dashboard: **New → Blueprint → point at this repo**.
+
+The apps are PaaS-portable without code changes:
+
+- both services bind `$PORT` (`server.port: ${PORT:...}`);
+- the datasource URL falls back to being assembled from `*_DB_HOST` / `*_DB_PORT` / `*_DB_NAME` (what a managed provider gives you), so `render.yaml` wires those with `fromDatabase`;
+- the gateway's upstreams and the Order Service's inventory URL come from env (`PROXY_SCHEME`, `*_UPSTREAM_HOST`, `INVENTORY_SCHEME`/`INVENTORY_HOST`), wired with `fromService` — no hostnames are hard-coded.
+
+Caveats: free Postgres instances expire after ~30 days and free web services cold-start
+(~50 s); the in-container Maven build may need `starter`-tier build resources. Bump the
+`plan:` fields for anything long-lived.
+
 ---
 
 ## Tests
@@ -239,5 +255,5 @@ orderflow/
 ## Tech
 
 Java 21 · Spring Boot 3.4 · Spring Data JPA · PostgreSQL 16 · Flyway · Resilience4j ·
-springdoc-openapi · JUnit 5 · Mockito · Testcontainers · WireMock · React 18 · Vite · nginx ·
-Docker Compose.
+Apache HttpClient 5 · springdoc-openapi · JUnit 5 · Mockito · Testcontainers · WireMock ·
+React 18 · Vite · nginx · Docker Compose · Render Blueprint.
