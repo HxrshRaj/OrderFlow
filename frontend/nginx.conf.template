@@ -1,0 +1,35 @@
+# Rendered at container start by the nginx image's envsubst step.
+# Substituted variables (see NGINX_ENVSUBST_FILTER): PORT, PROXY_SCHEME,
+# INVENTORY_UPSTREAM_HOST, ORDER_UPSTREAM_HOST. Everything else ($uri, $host, ...) is nginx's.
+#
+# Local (docker-compose):  PROXY_SCHEME=http,  *_UPSTREAM_HOST=<service>:<port>
+# Render:                   PROXY_SCHEME=https, *_UPSTREAM_HOST=<name>.onrender.com
+
+server {
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Single origin for the browser: static SPA here, both services proxied under /api/*.
+    proxy_ssl_server_name on;
+    proxy_http_version 1.1;
+
+    location /api/inventory/ {
+        proxy_pass ${PROXY_SCHEME}://${INVENTORY_UPSTREAM_HOST}/api/v1/inventory/;
+    }
+    location = /api/inventory {
+        proxy_pass ${PROXY_SCHEME}://${INVENTORY_UPSTREAM_HOST}/api/v1/inventory;
+    }
+
+    location /api/orders/ {
+        proxy_pass ${PROXY_SCHEME}://${ORDER_UPSTREAM_HOST}/api/v1/orders/;
+    }
+    location = /api/orders {
+        proxy_pass ${PROXY_SCHEME}://${ORDER_UPSTREAM_HOST}/api/v1/orders;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

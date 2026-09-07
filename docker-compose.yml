@@ -70,6 +70,11 @@ services:
 
   web:
     build: ./frontend
+    environment:
+      PORT: "80"
+      PROXY_SCHEME: http
+      INVENTORY_UPSTREAM_HOST: inventory-service:8081
+      ORDER_UPSTREAM_HOST: order-service:8080
     ports:
       - "8088:80"
     depends_on:
