@@ -3,10 +3,15 @@ package com.orderflow.order.client;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.orderflow.order.client.dto.ReservationLinePayload;
-import org.junit.jupiter.api.AfterEach;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.util.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -24,27 +29,40 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 /** Verifies how {@link InventoryClient} maps Inventory Service HTTP responses to exceptions. */
 class InventoryClientTest {
 
-    private WireMockServer wireMock;
+    private static final long RESPONSE_TIMEOUT_MS = 1000;
+
+    private static WireMockServer wireMock;
     private InventoryClient client;
+
+    @BeforeAll
+    static void startWireMock() {
+        wireMock = new WireMockServer(options().dynamicPort());
+        wireMock.start();
+    }
+
+    @AfterAll
+    static void stopWireMock() {
+        wireMock.stop();
+    }
 
     @BeforeEach
     void setUp() {
-        wireMock = new WireMockServer(options().dynamicPort());
-        wireMock.start();
+        wireMock.resetAll();
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(300);
-        requestFactory.setReadTimeout(600);
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(Timeout.ofSeconds(2))
+                .setResponseTimeout(Timeout.ofMilliseconds(RESPONSE_TIMEOUT_MS)) // short, for the read-timeout case
+                .build();
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .disableRedirectHandling()
+                .disableAutomaticRetries()
+                .build();
         RestClient restClient = RestClient.builder()
                 .baseUrl("http://localhost:" + wireMock.port())
-                .requestFactory(requestFactory)
+                .requestFactory(new HttpComponentsClientHttpRequestFactory(httpClient))
                 .build();
         client = new InventoryClient(restClient, new ObjectMapper());
-    }
-
-    @AfterEach
-    void tearDown() {
-        wireMock.stop();
     }
 
     private static List<ReservationLinePayload> lines() {
@@ -102,7 +120,7 @@ class InventoryClientTest {
     @Test
     void reserve_maps_a_read_timeout_to_InventoryUnavailableException() {
         wireMock.stubFor(post(urlEqualTo("/api/v1/reservations"))
-                .willReturn(aResponse().withStatus(201).withFixedDelay(1500)));
+                .willReturn(aResponse().withStatus(201).withFixedDelay((int) (RESPONSE_TIMEOUT_MS * 3))));
 
         assertThatExceptionOfType(InventoryUnavailableException.class)
                 .isThrownBy(() -> client.reserve(UUID.randomUUID(), lines()));

@@ -53,6 +53,13 @@
             <version>${resilience4j.version}</version>
         </dependency>
 
+        <!-- Apache HttpClient 5 backs the RestClient: correct handling of a 4xx-with-body
+             response and of connect/response timeouts, plus connection pooling. -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
