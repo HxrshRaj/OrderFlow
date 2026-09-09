@@ -12,7 +12,11 @@
 #   * Free Postgres instances expire after ~30 days and free web services cold-start (~50s).
 #     Bump `plan:` to `starter` for anything long-lived; the Maven image build may also need
 #     `starter` build resources.
-#   * After the first deploy, open http://<web-service>.onrender.com
+#   * IMPORTANT: the three *_HOST values below assume Render keeps the plain service
+#     subdomains. If your dashboard shows a suffixed URL for a service (e.g.
+#     orderflow-inventory-ab12.onrender.com), update INVENTORY_HOST / INVENTORY_UPSTREAM_HOST /
+#     ORDER_UPSTREAM_HOST to match, then Manual Sync + redeploy `orderflow-web`.
+#   * After the first deploy, open https://<orderflow-web-url>/
 
 databases:
   - name: orderflow-inventory-db
@@ -77,8 +81,9 @@ services:
         value: require
       - key: INVENTORY_SCHEME
         value: https
+      # Public hostname of the inventory service (see note at top of file if suffixed).
       - key: INVENTORY_HOST
-        fromService: { type: web, name: orderflow-inventory, property: host }
+        value: orderflow-inventory.onrender.com
 
   - type: web
     name: orderflow-web
@@ -93,7 +98,8 @@ services:
     envVars:
       - key: PROXY_SCHEME
         value: https
+      # Public hostnames of the two services (see note at top of file if suffixed).
       - key: INVENTORY_UPSTREAM_HOST
-        fromService: { type: web, name: orderflow-inventory, property: host }
+        value: orderflow-inventory.onrender.com
       - key: ORDER_UPSTREAM_HOST
-        fromService: { type: web, name: orderflow-order, property: host }
+        value: orderflow-order.onrender.com
