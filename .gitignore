@@ -16,6 +16,11 @@ node_modules/
 coverage/
 *.local
 
+# ===== Python =====
+__pycache__/
+*.pyc
+.venv/
+
 # ===== Environment =====
 .env
 .env.*

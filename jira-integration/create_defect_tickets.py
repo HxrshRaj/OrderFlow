@@ -251,6 +251,12 @@ def new_ui_refresh_race_ticket() -> TicketSpec:
 
 def main() -> int:
     try:
+        # Windows consoles often default to a legacy code page (cp1252) that can't encode
+        # characters JIRA might legitimately return (summaries, etc.); widen it defensively.
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+    try:
         return _run()
     except requests.exceptions.RequestException as exc:
         print(f"Network/API error talking to JIRA: {exc}", file=sys.stderr)
@@ -303,11 +309,11 @@ def _run() -> int:
         try:
             issue = verify_issue(config, key)
         except RuntimeError as exc:
-            print(f"  ✗ {key}: FAILED TO VERIFY - {exc}")
+            print(f"  [FAIL] {key}: FAILED TO VERIFY - {exc}")
             all_verified = False
             continue
         fields = issue["fields"]
-        print(f"  ✓ {key}: \"{fields['summary']}\" | status={fields['status']['name']} | "
+        print(f"  [OK] {key}: \"{fields['summary']}\" | status={fields['status']['name']} | "
               f"{config.site_url.rstrip('/')}/browse/{key}")
 
     if not all_verified:

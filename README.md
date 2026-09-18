@@ -283,7 +283,8 @@ order's rejection reason is still correct and still shown on the order card (dri
 different, non-racy code path), so `OrderRejectionUiTest` asserts on that instead of pinning
 a wait on a banner that cannot reliably appear — see the Javadoc on that test for the full
 account. This is filed as a real ticket, not silently patched, since fixing frontend
-behaviour is outside this addition's scope: **[ticket ID after filing — see below]**.
+behaviour is outside this addition's scope:
+**[KAN-2](https://hraj15709.atlassian.net/browse/KAN-2)**.
 
 ### JIRA defect tracking (`jira-integration/`)
 
@@ -310,15 +311,21 @@ python create_defect_tickets.py              # creates + verifies both tickets f
 | `JIRA_PROJECT_KEY` | the target project's key |
 | `JIRA_ISSUE_TYPE` | optional, defaults to `Bug`; the script probes the project's real issue types and falls back to `Task` if `Bug` isn't one of them |
 
-It files two tickets:
+It files two tickets, both real and verified — created via the API, then independently
+re-fetched with a separate GET to confirm they genuinely exist rather than trusting the
+create response:
 
-1. **The historical oversell defect** — the concurrent-reservation race described above under
-   "The concurrency problem", written up as a proper bug report (title, description, repro
-   steps) even though it's already fixed, with a direct reference to
-   `ReservationConcurrencyIT` as the regression test that proves the fix holds.
-2. **The rejection-banner race** found while building this suite (see above), with repro
-   steps, the exact file/root cause, and a reference to `OrderRejectionUiTest` as the
-   coverage that documents it.
+1. **[KAN-1](https://hraj15709.atlassian.net/browse/KAN-1)** — the historical oversell
+   defect: the concurrent-reservation race described above under "The concurrency problem",
+   written up as a proper bug report (title, description, repro steps) even though it's
+   already fixed, with a direct reference to `ReservationConcurrencyIT` as the regression
+   test that proves the fix holds.
+2. **[KAN-2](https://hraj15709.atlassian.net/browse/KAN-2)** — the rejection-banner race
+   found while building this suite (see above), with repro steps, the exact file/root cause,
+   and a reference to `OrderRejectionUiTest` as the coverage that documents it.
+
+(Both tickets live in a private Jira Cloud instance — the links will prompt for login if you
+don't have access; the ticket keys and this README are the durable record.)
 
 Credentials are read from the environment only (via `python-dotenv` locally); `.env` is
 gitignored repo-wide and `.env.example` ships with placeholders only.
