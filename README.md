@@ -229,6 +229,102 @@ Coverage of the failure modes (not just happy paths):
 
 ---
 
+## UI tests and defect tracking
+
+Two additions on top of the system above: a real browser test suite, and real defect
+tickets filed against a real issue tracker. Neither changes the backend or frontend design;
+the frontend gained a handful of `data-testid` attributes purely as test hooks.
+
+### Selenium UI suite (`selenium-tests/`)
+
+A standalone Maven module (JUnit 5 + Selenium WebDriver 4 + WebDriverManager, consistent
+with the rest of the repo's Java/JUnit stack) that drives real, headless Chrome against the
+actual running storefront — no mocked browser, no stubbed backend. It covers three real
+user flows:
+
+| Test | Flow |
+|---|---|
+| `PlaceOrderUiTest` | Set a quantity on an in-stock catalogue item, place the order, confirm it renders as `CONFIRMED`. |
+| `OrderRejectionUiTest` | Request far more units than exist, confirm the order renders as `REJECTED` with the real shortfall reason on the order card. |
+| `OrderStatusUiTest` | Place an order, ship it from the UI, confirm the badge flips to `SHIPPED` — then independently re-fetches that order straight from the Order Service's own API (bypassing the browser) and asserts the two agree. |
+
+Run it against a running stack:
+
+```bash
+docker compose up -d --build          # or point at a deployed environment, see below
+cd selenium-tests
+./mvnw test
+```
+
+Configuration (system property or env var, either works):
+
+| Property | Env var | Default | Meaning |
+|---|---|---|---|
+| `orderflow.baseUrl` | `ORDERFLOW_BASE_URL` | `http://localhost:8088` | the storefront under test |
+| `orderflow.orderServiceUrl` | `ORDER_SERVICE_URL` | `http://localhost:8080` | Order Service API, used only for the independent check in `OrderStatusUiTest` |
+| `selenium.headless` | `SELENIUM_HEADLESS` | `true` | set `false` to watch the browser locally |
+
+```bash
+./mvnw test -Dorderflow.baseUrl=https://your-deployed-app.example.com \
+            -Dorderflow.orderServiceUrl=https://your-order-service.example.com
+```
+
+Every wait is an explicit `WebDriverWait` condition (element clickable, order count reaches
+N, status reaches one of a set) — there is no `Thread.sleep` anywhere in the suite, and each
+test uses a freshly generated `customerId` so runs never interfere with each other or with
+data left over from a previous run. Run three times back to back locally: 3/3 green,
+identical results.
+
+**A real bug this suite found:** while automating the rejection flow, the "order rejected"
+banner turned out to be unreadable in practice — `App.jsx`'s `placeOrder()` sets it, then
+immediately calls `refresh()`, whose success path unconditionally clears it
+(`setError(null)`), and the same clear fires again on every 3-second poll after that. The
+order's rejection reason is still correct and still shown on the order card (driven by a
+different, non-racy code path), so `OrderRejectionUiTest` asserts on that instead of pinning
+a wait on a banner that cannot reliably appear — see the Javadoc on that test for the full
+account. This is filed as a real ticket, not silently patched, since fixing frontend
+behaviour is outside this addition's scope: **[ticket ID after filing — see below]**.
+
+### JIRA defect tracking (`jira-integration/`)
+
+A small Python script, `jira-integration/create_defect_tickets.py`, that files real tickets
+in a real Atlassian Cloud (JIRA) project over the JIRA Cloud REST API v3 — no mocking, and
+it re-fetches each ticket after creating it to prove it actually exists rather than trusting
+the create call's response.
+
+Setup:
+
+```bash
+cd jira-integration
+pip install -r requirements.txt
+cp .env.example .env       # fill in real values — never commit this file
+python create_defect_tickets.py --dry-run    # prints the exact payloads, no network calls
+python create_defect_tickets.py              # creates + verifies both tickets for real
+```
+
+| Env var | Meaning |
+|---|---|
+| `JIRA_SITE_URL` | your Atlassian Cloud site, e.g. `https://your-domain.atlassian.net` |
+| `JIRA_EMAIL` | the Atlassian account the API token belongs to |
+| `JIRA_API_TOKEN` | generate at id.atlassian.com/manage-profile/security/api-tokens — **never commit this** |
+| `JIRA_PROJECT_KEY` | the target project's key |
+| `JIRA_ISSUE_TYPE` | optional, defaults to `Bug`; the script probes the project's real issue types and falls back to `Task` if `Bug` isn't one of them |
+
+It files two tickets:
+
+1. **The historical oversell defect** — the concurrent-reservation race described above under
+   "The concurrency problem", written up as a proper bug report (title, description, repro
+   steps) even though it's already fixed, with a direct reference to
+   `ReservationConcurrencyIT` as the regression test that proves the fix holds.
+2. **The rejection-banner race** found while building this suite (see above), with repro
+   steps, the exact file/root cause, and a reference to `OrderRejectionUiTest` as the
+   coverage that documents it.
+
+Credentials are read from the environment only (via `python-dotenv` locally); `.env` is
+gitignored repo-wide and `.env.example` ships with placeholders only.
+
+---
+
 ## Layout
 
 ```
@@ -248,6 +344,8 @@ orderflow/
 │     ├─ web/             controllers + RFC 7807 handler
 │     └─ scheduler/       stuck-order reconciler
 ├─ frontend/              React + Vite SPA; built and served by nginx, which proxies /api/*
+├─ selenium-tests/        standalone Maven module: real headless-Chrome UI regression suite
+├─ jira-integration/      Python script filing real defect tickets via the JIRA Cloud REST API
 ├─ docs/API.md            endpoint reference + example payloads
 └─ docker-compose.yml     5 services, health-gated startup, one DB per service
 ```
@@ -256,4 +354,5 @@ orderflow/
 
 Java 21 · Spring Boot 3.4 · Spring Data JPA · PostgreSQL 16 · Flyway · Resilience4j ·
 Apache HttpClient 5 · springdoc-openapi · JUnit 5 · Mockito · Testcontainers · WireMock ·
-React 18 · Vite · nginx · Docker Compose · Render Blueprint.
+React 18 · Vite · nginx · Docker Compose · Render Blueprint · Selenium WebDriver ·
+WebDriverManager · JIRA Cloud REST API.
