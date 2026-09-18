@@ -97,11 +97,19 @@ export default function App() {
         <h1>OrderFlow</h1>
         <label>
           Customer&nbsp;
-          <input value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
+          <input
+            data-testid="customer-id-input"
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+          />
         </label>
       </header>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="error" data-testid="error-banner">
+          {error}
+        </div>
+      )}
 
       <div className="columns">
         <section>
@@ -118,17 +126,18 @@ export default function App() {
             </thead>
             <tbody>
               {inventory.map((item) => (
-                <tr key={item.sku}>
+                <tr key={item.sku} data-testid={`inventory-row-${item.sku}`}>
                   <td>
                     <div>{item.name}</div>
                     <code>{item.sku}</code>
                   </td>
                   <td className="num">{money(priceOf(item.sku))}</td>
                   <td className="num">
-                    <strong>{item.availableQuantity}</strong>
+                    <strong data-testid={`available-${item.sku}`}>{item.availableQuantity}</strong>
                     <button
                       className="link"
                       title="Restock +5"
+                      data-testid={`restock-${item.sku}`}
                       onClick={() => act(() => api.restock(item.sku, 5))}
                     >
                       +5
@@ -140,6 +149,7 @@ export default function App() {
                       type="number"
                       min="0"
                       max={item.availableQuantity}
+                      data-testid={`qty-input-${item.sku}`}
                       value={cart[item.sku] || 0}
                       onChange={(e) => setQty(item.sku, parseInt(e.target.value || '0', 10))}
                     />
@@ -154,7 +164,11 @@ export default function App() {
               {cartLines.length} line{cartLines.length === 1 ? '' : 's'} &middot;{' '}
               <strong>{money(cartTotal)}</strong>
             </span>
-            <button disabled={busy || cartLines.length === 0} onClick={placeOrder}>
+            <button
+              data-testid="place-order-btn"
+              disabled={busy || cartLines.length === 0}
+              onClick={placeOrder}
+            >
               Place order
             </button>
           </div>
@@ -163,12 +177,14 @@ export default function App() {
         <section>
           <h2>Orders</h2>
           {orders.length === 0 && <p className="muted">No orders yet for this customer.</p>}
-          <ul className="orders">
+          <ul className="orders" data-testid="orders-list">
             {orders.map((o) => (
-              <li key={o.orderNumber}>
+              <li key={o.orderNumber} data-testid={`order-${o.orderNumber}`}>
                 <div className="order-head">
                   <code>{o.orderNumber}</code>
-                  <span className={STATUS_CLASS[o.status] || 'badge'}>{o.status}</span>
+                  <span className={STATUS_CLASS[o.status] || 'badge'} data-testid="order-status">
+                    {o.status}
+                  </span>
                   <span className="total">{money(o.totalAmount)}</span>
                 </div>
                 <div className="order-lines">
@@ -178,15 +194,24 @@ export default function App() {
                     </span>
                   ))}
                 </div>
-                {o.rejectionReason && <div className="muted">{o.rejectionReason}</div>}
+                {o.rejectionReason && (
+                  <div className="muted" data-testid="rejection-reason">
+                    {o.rejectionReason}
+                  </div>
+                )}
                 <div className="order-actions">
                   {o.status === 'CONFIRMED' && (
-                    <button disabled={busy} onClick={() => act(() => api.shipOrder(o.orderNumber))}>
+                    <button
+                      data-testid="ship-btn"
+                      disabled={busy}
+                      onClick={() => act(() => api.shipOrder(o.orderNumber))}
+                    >
                       Ship
                     </button>
                   )}
                   {(o.status === 'CONFIRMED' || o.status === 'PLACED') && (
                     <button
+                      data-testid="cancel-btn"
                       disabled={busy}
                       className="secondary"
                       onClick={() => act(() => api.cancelOrder(o.orderNumber))}
