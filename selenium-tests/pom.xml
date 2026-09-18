@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.orderflow</groupId>
+    <artifactId>selenium-tests</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+    <name>selenium-tests</name>
+    <description>
+        Real browser UI tests for the OrderFlow storefront, driven with Selenium WebDriver
+        against a running instance of the stack (docker-compose or a deployed environment).
+        Standalone Maven module: no dependency on the two Spring Boot services' build.
+    </description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <junit.version>5.11.4</junit.version>
+        <selenium.version>4.27.0</selenium.version>
+        <webdrivermanager.version>5.9.2</webdrivermanager.version>
+        <assertj.version>3.26.3</assertj.version>
+        <jackson.version>2.18.2</jackson.version>
+
+        <!-- Overridable: -Dorderflow.baseUrl=https://your-app.example.com -->
+        <orderflow.baseUrl>http://localhost:8088</orderflow.baseUrl>
+        <orderflow.orderServiceUrl>http://localhost:8080</orderflow.orderServiceUrl>
+        <selenium.headless>true</selenium.headless>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>${selenium.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- Downloads a chromedriver binary matching the locally installed Chrome. -->
+            <groupId>io.github.bonigarcia</groupId>
+            <artifactId>webdrivermanager</artifactId>
+            <version>${webdrivermanager.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- Used only to parse the one JSON field the independent backend-state check reads. -->
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <!-- UI tests are not part of the ordinary `mvn test` of the other modules;
+                         they need a real browser and a running stack. Run explicitly:
+                         ./mvnw test -Dorderflow.baseUrl=... -->
+                    <systemPropertyVariables>
+                        <orderflow.baseUrl>${orderflow.baseUrl}</orderflow.baseUrl>
+                        <orderflow.orderServiceUrl>${orderflow.orderServiceUrl}</orderflow.orderServiceUrl>
+                        <selenium.headless>${selenium.headless}</selenium.headless>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
