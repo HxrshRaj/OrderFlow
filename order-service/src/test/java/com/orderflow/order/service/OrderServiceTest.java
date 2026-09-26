@@ -7,6 +7,7 @@ import com.orderflow.order.client.Shortfall;
 import com.orderflow.order.domain.IllegalOrderStateException;
 import com.orderflow.order.domain.Order;
 import com.orderflow.order.domain.OrderStatus;
+import com.orderflow.order.domain.event.OrderShipped;
 import com.orderflow.order.repository.OrderRepository;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -50,6 +52,8 @@ class OrderServiceTest {
     InventoryClient inventoryClient;
     @Mock
     PlatformTransactionManager transactionManager;
+    @Mock
+    ApplicationEventPublisher events;
 
     OrderService service;
     private final AtomicReference<Order> stored = new AtomicReference<>();
@@ -58,7 +62,7 @@ class OrderServiceTest {
     void setUp() {
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new OrderService(orderRepository, inventoryClient, transactionManager,
-                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC), events);
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             stored.set(inv.getArgument(0));
@@ -128,6 +132,7 @@ class OrderServiceTest {
 
         assertThat(shipped.getStatus()).isEqualTo(OrderStatus.SHIPPED);
         verify(inventoryClient).commit(confirmed.getReservationId());
+        verify(events).publishEvent(new OrderShipped("ORD-2000", confirmed.getReservationId(), "cust-1"));
     }
 
     @Test

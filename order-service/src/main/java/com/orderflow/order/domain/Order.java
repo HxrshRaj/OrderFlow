@@ -1,5 +1,6 @@
 package com.orderflow.order.domain;
 
+import com.orderflow.order.domain.event.OrderShipped;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -23,8 +25,11 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The order aggregate. State transitions are enforced here rather than in the service, so an
- * illegal move (e.g. shipping a REJECTED order) fails the same way from any caller.
+ * The order aggregate — the consistency boundary for the Order Management bounded context (see
+ * {@code docs/DDD.md}). State transitions and the invariants around them are enforced here
+ * rather than in the service, so an illegal move (e.g. shipping a REJECTED order, or adding a
+ * line item after the order has shipped) fails the same way regardless of which caller — today
+ * or in the future — attempts it.
  *
  * <pre>
  *   PLACED --reserve ok--> CONFIRMED --ship--> SHIPPED
@@ -33,6 +38,11 @@ import java.util.UUID;
  *     v                        v
  *   REJECTED               CANCELLED
  * </pre>
+ *
+ * {@link OrderItem} is not its own aggregate: it has no repository, no identity outside this
+ * order, and is only ever constructed through {@link #addItem}. {@code ship()} additionally
+ * records an {@link OrderShipped} domain event, drained by the application layer via
+ * {@link #pullDomainEvents()} once the transition is durably persisted.
  */
 @Entity
 @Table(name = "orders")
@@ -68,6 +78,14 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<OrderItem> items = new ArrayList<>();
 
+    /**
+     * Domain events recorded by this aggregate but not yet handed to the application layer.
+     * Never persisted (JPA would have no idea how to map a heterogeneous event list) and never
+     * exposed directly — only {@link #pullDomainEvents()} can drain it.
+     */
+    @Transient
+    private final List<Object> domainEvents = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -93,7 +111,18 @@ public class Order {
         return new Order(orderNumber, reservationId, customerId);
     }
 
+    /**
+     * Add a line item while the order is still being composed.
+     *
+     * @throws OrderItemsLockedException if the order has moved past {@code PLACED} — items are
+     *                                    locked in the instant reservation is attempted, so this
+     *                                    can never happen "after the order has shipped" (or been
+     *                                    confirmed, rejected, or cancelled) no matter who calls it
+     */
     public void addItem(String sku, int quantity, BigDecimal unitPrice) {
+        if (status != OrderStatus.PLACED) {
+            throw new OrderItemsLockedException(orderNumber, status);
+        }
         OrderItem item = new OrderItem(this, sku, quantity, unitPrice);
         this.items.add(item);
         this.totalAmount = this.totalAmount.add(item.lineTotal());
@@ -114,6 +143,7 @@ public class Order {
     public void ship() {
         requireStatus(OrderStatus.CONFIRMED, "ship");
         this.status = OrderStatus.SHIPPED;
+        domainEvents.add(new OrderShipped(orderNumber, reservationId, customerId));
     }
 
     public void cancel() {
@@ -125,6 +155,17 @@ public class Order {
 
     public boolean isAwaitingInventory() {
         return status == OrderStatus.PLACED;
+    }
+
+    /**
+     * Drains and returns every domain event recorded since the last call. The application
+     * layer calls this after a mutation has been durably persisted, then publishes whatever
+     * comes back — so a listener only ever hears about facts that actually happened.
+     */
+    public List<Object> pullDomainEvents() {
+        List<Object> events = List.copyOf(domainEvents);
+        domainEvents.clear();
+        return events;
     }
 
     private void requireStatus(OrderStatus expected, String action) {

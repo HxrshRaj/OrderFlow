@@ -12,6 +12,7 @@ import com.orderflow.order.repository.OrderRepository;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -50,15 +51,18 @@ public class OrderService {
     private final InventoryClient inventoryClient;
     private final TransactionTemplate txTemplate;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public OrderService(OrderRepository orderRepository,
                         InventoryClient inventoryClient,
                         PlatformTransactionManager transactionManager,
-                        Clock clock) {
+                        Clock clock,
+                        ApplicationEventPublisher events) {
         this.orderRepository = orderRepository;
         this.inventoryClient = inventoryClient;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.clock = clock;
+        this.events = events;
     }
 
     public Order placeOrder(PlaceOrderCommand command) {
@@ -144,12 +148,20 @@ public class OrderService {
         }
     }
 
+    /**
+     * Applies a state-transition method to the order and persists it, then publishes whatever
+     * domain events that transition recorded (see {@link Order#pullDomainEvents()}). Publishing
+     * happens from inside this same transaction, so a {@code @TransactionalEventListener}
+     * bound to {@code AFTER_COMMIT} only ever fires once the transition is durably saved.
+     */
     private Order transition(Long orderId, Consumer<Order> mutation) {
         return txTemplate.execute(status -> {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new OrderNotFoundException(orderId));
             mutation.accept(order);
-            return orderRepository.save(order);
+            Order saved = orderRepository.save(order);
+            order.pullDomainEvents().forEach(events::publishEvent);
+            return saved;
         });
     }
 

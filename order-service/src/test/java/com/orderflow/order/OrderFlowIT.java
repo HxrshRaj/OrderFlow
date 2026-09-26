@@ -5,6 +5,7 @@ import com.orderflow.order.service.OrderService;
 import com.orderflow.order.support.AbstractPostgresIntegrationTest;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,8 @@ class OrderFlowIT extends AbstractPostgresIntegrationTest {
     OrderRepository orderRepository;
     @Autowired
     CircuitBreakerRegistry circuitBreakerRegistry;
+    @Autowired
+    MeterRegistry meterRegistry;
 
     @BeforeEach
     void reset() {
@@ -145,18 +148,35 @@ class OrderFlowIT extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void shipping_a_confirmed_order_commits_the_reservation() {
+    void shipping_a_confirmed_order_commits_the_reservation_and_publishes_the_domain_event() {
         stubReserve(201, "{\"status\":\"CONFIRMED\"}");
         INVENTORY.stubFor(post(urlPathMatching("/api/v1/reservations/.*/commit"))
                 .willReturn(aResponse().withStatus(200)));
         String orderNumber = (String) http.postForEntity("/api/v1/orders", orderBody("cust-ship"), Map.class)
                 .getBody().get("orderNumber");
 
+        double shippedBefore = counterValue("orderflow.orders.shipped");
+
         ResponseEntity<Map> shipped = http.postForEntity("/api/v1/orders/{n}/ship", null, Map.class, orderNumber);
 
         assertThat(shipped.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(shipped.getBody()).containsEntry("status", "SHIPPED");
         INVENTORY.verify(postRequestedFor(urlPathMatching("/api/v1/reservations/.*/commit")));
+
+        // Proves the OrderShipped domain event genuinely round-tripped through Spring's
+        // transactional-event machinery end to end: Order.ship() recorded it,
+        // OrderService.transition() published it after the commit, and
+        // OrderShippedMetricsListener (a class the aggregate and service know nothing about)
+        // reacted to it - by the time the HTTP call above returned, since
+        // @TransactionalEventListener(AFTER_COMMIT) runs synchronously in the committing thread.
+        assertThat(counterValue("orderflow.orders.shipped"))
+                .as("the AFTER_COMMIT listener should have incremented the shipped counter exactly once")
+                .isEqualTo(shippedBefore + 1.0);
+    }
+
+    private double counterValue(String meterName) {
+        var counter = meterRegistry.find(meterName).counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     @Test

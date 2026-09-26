@@ -3,6 +3,7 @@ package com.orderflow.order.web;
 import com.orderflow.order.client.InsufficientStockException;
 import com.orderflow.order.client.InventoryUnavailableException;
 import com.orderflow.order.domain.IllegalOrderStateException;
+import com.orderflow.order.domain.OrderItemsLockedException;
 import com.orderflow.order.service.OrderNotFoundException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.springframework.http.HttpHeaders;
@@ -33,6 +34,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleIllegalState(IllegalOrderStateException ex) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         pd.setTitle("Illegal order state transition");
+        return pd;
+    }
+
+    @ExceptionHandler(OrderItemsLockedException.class)
+    public ProblemDetail handleItemsLocked(OrderItemsLockedException ex) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        pd.setTitle("Order items locked");
         return pd;
     }
 
