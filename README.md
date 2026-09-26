@@ -148,6 +148,25 @@ order stays PLACED → Inventory recovers → reconciler confirms it".
 
 ---
 
+## Domain-driven design
+
+Full write-up: **[docs/domain-design.md](docs/domain-design.md)** — the two bounded contexts
+(Order Management, Inventory Management) as they actually exist in the code, the context map
+between them, and a real refactor on top of them:
+
+- **An aggregate invariant that didn't exist before this refactor:** `Order.addItem()` used to
+  have no guard at all — every caller just happened to only use it correctly. It now refuses
+  to add a line item to any order that isn't `PLACED` (confirmed, shipped, rejected, or
+  cancelled), throwing a dedicated `OrderItemsLockedException` mapped to `409`. Proven by
+  `OrderTest`, including a before/after check that the test genuinely fails without the guard.
+- **A real domain event, `OrderShipped`**, recorded by the aggregate on `ship()` and published
+  after the transition is durably committed. It stays internal to the Order Service on
+  purpose — stated honestly, not dressed up as cross-service messaging OrderFlow doesn't have
+  — and is consumed by a Micrometer counter (`orderflow.orders.shipped`) that neither `Order`
+  nor `OrderService` has any reference to, proven end-to-end in `OrderFlowIT`.
+
+---
+
 ## Running it
 
 ### Everything, in containers
@@ -224,8 +243,9 @@ Coverage of the failure modes (not just happy paths):
 | `ReservationLifecycleIT` | reserve→commit / reserve→release maths; idempotent commit; expiry sweep returns stock |
 | `ReservationServiceTest`, `InventoryServiceTest` | shortfall vs unknown-SKU, duplicate-key → replay, optimistic-lock retry then give up |
 | `InventoryClientTest` | `409` → `InsufficientStockException` with parsed shortfalls; `500` and read-timeout → `InventoryUnavailableException`; `release` 404 → no-op |
-| `OrderServiceTest` | place → confirmed / rejected / stays-placed; ship & cancel state guards; reconciler |
-| `OrderFlowIT` | end-to-end place/reject/ship/cancel over HTTP; **Inventory down → PLACED → recovers → reconciled** |
+| `OrderServiceTest` | place → confirmed / rejected / stays-placed; ship & cancel state guards; reconciler; `ship()` publishes `OrderShipped` |
+| `OrderFlowIT` | end-to-end place/reject/ship/cancel over HTTP; **Inventory down → PLACED → recovers → reconciled**; `OrderShipped` → Micrometer counter, verified end-to-end |
+| `OrderTest` | the `Order` aggregate's own invariants directly, no mocks: items can be added while `PLACED`, locked everywhere else — see [Domain-driven design](docs/domain-design.md) |
 
 ---
 
@@ -345,7 +365,8 @@ orderflow/
 │     └─ scheduler/       expired-hold sweeper
 ├─ order-service/         Spring Boot · owns order_db · order lifecycle + Inventory coordination
 │  └─ src/main/java/com/orderflow/order/
-│     ├─ domain/          Order (state machine), OrderItem
+│     ├─ domain/          Order (aggregate root: state machine + item-locking invariant), OrderItem
+│     │  └─ event/        OrderShipped (internal domain event) + its Micrometer listener
 │     ├─ client/          InventoryClient — Resilience4j retry + circuit breaker
 │     ├─ service/         OrderService — network calls outside transactions
 │     ├─ web/             controllers + RFC 7807 handler
@@ -362,4 +383,4 @@ orderflow/
 Java 21 · Spring Boot 3.4 · Spring Data JPA · PostgreSQL 16 · Flyway · Resilience4j ·
 Apache HttpClient 5 · springdoc-openapi · JUnit 5 · Mockito · Testcontainers · WireMock ·
 React 18 · Vite · nginx · Docker Compose · Render Blueprint · Selenium WebDriver ·
-WebDriverManager · JIRA Cloud REST API.
+WebDriverManager · JIRA Cloud REST API · Micrometer.
