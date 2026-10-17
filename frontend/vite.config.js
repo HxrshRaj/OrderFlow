@@ -13,6 +13,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/inventory/, '/api/v1/inventory'),
       },
+      '/api/recommendations': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/recommendations/, '/api/v1/recommendations'),
+      },
       '/api/orders': {
         target: 'http://localhost:8080',
         changeOrigin: true,

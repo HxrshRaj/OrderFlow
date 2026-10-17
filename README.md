@@ -352,6 +352,22 @@ gitignored repo-wide and `.env.example` ships with placeholders only.
 
 ---
 
+## Catalogue search and recommendations
+
+Two storefront features added on top of the order system: finding products, and suggesting what to add to the cart.
+
+**Search** (`GET /api/inventory/search?q=...&inStockOnly=false&limit=20`, Inventory Service). One PostgreSQL query combines three signals: a full-text *prefix* match (`mou` finds Mouse), trigram word similarity from `pg_trgm` (`keybord` finds Keyboard; threshold 0.55, picked by inspecting scores so `mou` does not match Monitor), and a SKU substring match. Results are ranked by full-text rank (weighted 2x) plus word similarity, then by name for a stable order. User input is reduced to letters, digits and spaces before it reaches `to_tsquery`/`LIKE`, so operators and wildcards cannot get through (`SearchQuery`). GIN indexes on `to_tsvector(name)` and on `name gin_trgm_ops` back it (migration `V3`).
+
+**Recommendations** (`GET /api/recommendations?sku=A&sku=B&limit=5`, Order Service). Item-to-item "frequently bought together": for each SKU in the cart, every other SKU is scored by the **Jaccard similarity** of their order sets (orders containing both / orders containing either), summed across the cart. Why Jaccard and not "most often seen together": a best-seller is in a huge share of orders, so a raw co-purchase count recommends the best-seller for everything. Jaccard divides that out. Only `CONFIRMED`/`SHIPPED` orders count, pairs seen fewer than 2 times are ignored (`recommendations.min-support`), and if there is too little history the list is topped up with the most-ordered SKUs, labelled `POPULAR` so a client can tell the difference. Stock belongs to the Inventory Service, so the UI hides sold-out suggestions itself.
+
+**Tests.** `RecommendationQualityIT` builds synthetic order history on real PostgreSQL where the right answer is known and one best-seller sits in most orders: the Jaccard ranking picks each product's real partner 5 out of 5 times, while a guard test shows a raw co-occurrence count would have picked the best-seller. It also checks that rejected/cancelled orders and one-off pairs are ignored and that cold start falls back to `POPULAR`. `InventorySearchIT` checks prefixes, typos, ranking, SKU matches, in-stock filtering, SQL-injection text and limit clamping against real PostgreSQL. Unit tests cover `SearchQuery`, the recommendation service and the controller.
+
+**Limits, stated plainly.**
+- The purchase history in a fresh database is **synthetic** (`V2__seed_order_history.sql`: customer `seed-history`, order numbers `SEED-...`) so the demo has something to show. Real orders are added on top of it. Delete that migration to start empty.
+- The recommender is a counting method, not a trained model; there is no per-customer personalisation. The test above shows it behaves as designed on constructed data, not that it would lift sales.
+- Search covers product names and SKUs only. It is not a general search engine (no synonyms, categories, or relevance learning).
+- Prices still live in the storefront's small price list; the added catalogue items fall back to a default price.
+
 ## Layout
 
 ```

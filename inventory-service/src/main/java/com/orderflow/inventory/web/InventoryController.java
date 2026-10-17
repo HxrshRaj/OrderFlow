@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -35,6 +36,16 @@ public class InventoryController {
     @Operation(summary = "List all stock items")
     public List<InventoryItemResponse> list() {
         return inventoryService.listAll().stream().map(InventoryItemResponse::from).toList();
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Search the catalogue",
+            description = "Matches product names by prefix and tolerates small typos (e.g. `keybord`), "
+                    + "and matches SKUs. Best matches first. `limit` is capped at 50.")
+    public List<InventoryItemResponse> search(@RequestParam(name = "q", defaultValue = "") String q,
+                                              @RequestParam(name = "inStockOnly", defaultValue = "false") boolean inStockOnly,
+                                              @RequestParam(name = "limit", defaultValue = "20") int limit) {
+        return inventoryService.search(q, inStockOnly, limit).stream().map(InventoryItemResponse::from).toList();
     }
 
     @GetMapping("/{sku}")

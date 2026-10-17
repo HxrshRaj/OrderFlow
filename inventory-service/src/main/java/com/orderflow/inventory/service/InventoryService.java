@@ -27,6 +27,10 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 public class InventoryService {
 
+    static final int MAX_SEARCH_RESULTS = 50;
+    /** Below this, trigram word similarity is noise ("xyz" would otherwise match everything). */
+    static final double MIN_WORD_SIMILARITY = 0.55;
+
     private final InventoryItemRepository repository;
     private final TransactionTemplate txTemplate;
     private final int adjustMaxRetries;
@@ -41,6 +45,24 @@ public class InventoryService {
 
     public List<InventoryItem> listAll() {
         return txTemplate.execute(status -> repository.findAll(Sort.by("sku")));
+    }
+
+    /**
+     * Search the catalogue by name or SKU, tolerating prefixes and small typos. An empty query
+     * returns the first {@code limit} items by name. {@code limit} is clamped to 1..50.
+     */
+    public List<InventoryItem> search(String rawQuery, boolean inStockOnly, int limit) {
+        int bounded = Math.min(Math.max(limit, 1), MAX_SEARCH_RESULTS);
+        SearchQuery query = SearchQuery.parse(rawQuery);
+        return txTemplate.execute(status -> {
+            if (query.isEmpty()) {
+                return repository.findAll(Sort.by("name")).stream()
+                        .filter(item -> !inStockOnly || item.getAvailableQuantity() > 0)
+                        .limit(bounded)
+                        .toList();
+            }
+            return repository.search(query.text(), query.tsQuery(), MIN_WORD_SIMILARITY, inStockOnly, bounded);
+        });
     }
 
     public InventoryItem getBySku(String sku) {

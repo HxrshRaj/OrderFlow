@@ -30,6 +30,9 @@ export default function App() {
   const [cart, setCart] = useState({}); // sku -> qty
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null); // null = not searching
+  const [recs, setRecs] = useState([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -48,6 +51,29 @@ export default function App() {
     return () => clearInterval(timer);
   }, [refresh]);
 
+  // Debounced catalogue search. Stale responses are dropped so a slow early request cannot
+  // overwrite the results of a later keystroke.
+  useEffect(() => {
+    const text = query.trim();
+    if (!text) {
+      setSearchResults(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const results = await api.searchInventory(text);
+        if (!cancelled) setSearchResults(results);
+      } catch (e) {
+        if (!cancelled) setError(e.message);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
   const cartLines = useMemo(
     () =>
       Object.entries(cart)
@@ -55,7 +81,33 @@ export default function App() {
         .map(([sku, qty]) => ({ sku, quantity: qty, unitPrice: priceOf(sku) })),
     [cart],
   );
+  const cartSkuKey = cartLines.map((l) => l.sku).sort().join(',');
+  useEffect(() => {
+    let cancelled = false;
+    const skus = cartSkuKey ? cartSkuKey.split(',') : [];
+    api
+      .recommendations(skus, 8)
+      .then((list) => {
+        if (!cancelled) setRecs(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRecs([]); // recommendations are optional; never block the storefront
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cartSkuKey]);
   const cartTotal = cartLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+
+  const stockBySku = useMemo(() => Object.fromEntries(inventory.map((i) => [i.sku, i])), [inventory]);
+  // Search results come back ranked; show them in that order but with the freshest stock numbers.
+  const visibleItems = searchResults
+    ? searchResults.map((r) => stockBySku[r.sku] || r)
+    : inventory;
+  const suggestions = recs
+    .map((r) => ({ ...r, item: stockBySku[r.sku] }))
+    .filter((r) => r.item && r.item.availableQuantity > 0)
+    .slice(0, 4);
 
   const setQty = (sku, qty) => setCart((c) => ({ ...c, [sku]: Math.max(0, qty) }));
 
@@ -114,6 +166,39 @@ export default function App() {
       <div className="columns">
         <section>
           <h2>Catalogue</h2>
+          <input
+            className="search"
+            type="search"
+            placeholder="Search products or SKUs (typos are fine)"
+            aria-label="Search products"
+            data-testid="search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {searchResults && (
+            <p className="muted" data-testid="search-summary">
+              {searchResults.length} result{searchResults.length === 1 ? '' : 's'} for &ldquo;
+              {query.trim()}&rdquo;, best match first
+            </p>
+          )}
+          {suggestions.length > 0 && (
+            <div className="suggestions" data-testid="suggestions">
+              <h3>{cartLines.length > 0 ? 'Frequently bought together' : 'Popular right now'}</h3>
+              <ul>
+                {suggestions.map((r) => (
+                  <li key={r.sku} data-testid={`suggestion-${r.sku}`}>
+                    <span>
+                      {r.item.name} <code>{r.sku}</code>
+                      {r.reason === 'POPULAR' && <em className="muted"> &middot; popular</em>}
+                    </span>
+                    <button className="secondary" onClick={() => setQty(r.sku, (cart[r.sku] || 0) + 1)}>
+                      Add
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <table>
             <thead>
               <tr>
@@ -125,7 +210,7 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {inventory.map((item) => (
+              {visibleItems.map((item) => (
                 <tr key={item.sku} data-testid={`inventory-row-${item.sku}`}>
                   <td>
                     <div>{item.name}</div>
@@ -172,6 +257,7 @@ export default function App() {
               Place order
             </button>
           </div>
+
         </section>
 
         <section>

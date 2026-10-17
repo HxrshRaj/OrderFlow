@@ -20,6 +20,13 @@ async function request(path, options) {
 
 export const api = {
   listInventory: () => request('/api/inventory'),
+  searchInventory: (q) => request(`/api/inventory/search?q=${encodeURIComponent(q)}&limit=50`),
+  recommendations: (skus, limit = 4) => {
+    const params = new URLSearchParams();
+    skus.forEach((sku) => params.append('sku', sku));
+    params.set('limit', String(limit));
+    return request(`/api/recommendations?${params.toString()}`);
+  },
   restock: (sku, quantityDelta) =>
     request(`/api/inventory/${encodeURIComponent(sku)}`, {
       method: 'PATCH',

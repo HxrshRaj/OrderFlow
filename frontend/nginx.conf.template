@@ -29,6 +29,10 @@ server {
         proxy_pass ${PROXY_SCHEME}://${ORDER_UPSTREAM_HOST}/api/v1/orders;
     }
 
+    location = /api/recommendations {
+        proxy_pass ${PROXY_SCHEME}://${ORDER_UPSTREAM_HOST}/api/v1/recommendations;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }

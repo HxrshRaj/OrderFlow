@@ -239,3 +239,9 @@ footer {
   margin-top: 28px;
   font-size: 12px;
 }
+
+.search { width: 100%; box-sizing: border-box; padding: 8px 10px; margin: 0 0 8px; font-size: 14px; }
+.suggestions { margin: 0 0 16px; padding: 12px; border: 1px solid #d0d7e2; border-radius: 6px; background: #f7f9fc; }
+.suggestions h3 { margin: 0 0 8px; font-size: 14px; }
+.suggestions ul { list-style: none; margin: 0; padding: 0; }
+.suggestions li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 12px; }
