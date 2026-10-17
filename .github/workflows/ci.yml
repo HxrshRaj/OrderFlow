@@ -27,6 +27,14 @@ jobs:
       - name: Unit and integration tests (real PostgreSQL)
         working-directory: inventory-service
         run: mvn -B verify
+      - name: Report executed tests
+        if: always()
+        working-directory: inventory-service
+        run: |
+          for f in target/surefire-reports/TEST-*.xml target/failsafe-reports/TEST-*.xml; do
+            [ -f "$f" ] && echo "$(basename "$f" .xml | sed 's/^TEST-//') $(grep -o -m1 'tests="[0-9]*" errors="[0-9]*" skipped="[0-9]*" failures="[0-9]*"' "$f")"
+          done > test-summary.txt
+          echo "::notice title=inventory-service tests::$(tr '\n' ';' < test-summary.txt)"
 
   order-service:
     runs-on: ubuntu-latest
@@ -49,6 +57,14 @@ jobs:
       - name: Unit and integration tests (real PostgreSQL)
         working-directory: order-service
         run: mvn -B verify
+      - name: Report executed tests
+        if: always()
+        working-directory: order-service
+        run: |
+          for f in target/surefire-reports/TEST-*.xml target/failsafe-reports/TEST-*.xml; do
+            [ -f "$f" ] && echo "$(basename "$f" .xml | sed 's/^TEST-//') $(grep -o -m1 'tests="[0-9]*" errors="[0-9]*" skipped="[0-9]*" failures="[0-9]*"' "$f")"
+          done > test-summary.txt
+          echo "::notice title=order-service tests::$(tr '\n' ';' < test-summary.txt)"
 
   frontend:
     runs-on: ubuntu-latest
