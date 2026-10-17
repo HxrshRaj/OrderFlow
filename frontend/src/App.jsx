@@ -40,15 +40,31 @@ export default function App() {
       setInventory(inv);
       setOrders(ord);
       setError(null);
+      return true;
     } catch (e) {
       setError(e.message);
+      return false;
     }
   }, [customerId]);
 
+  // Poll every 3s, but back off (up to 30s) while the server is failing or rate-limiting, and
+  // skip polls while the tab is hidden, so a struggling free-tier backend is not hammered.
   useEffect(() => {
-    refresh();
-    const timer = setInterval(refresh, 3000);
-    return () => clearInterval(timer);
+    let stopped = false;
+    let timer;
+    let delay = 3000;
+    const tick = async () => {
+      if (!document.hidden) {
+        const ok = await refresh();
+        delay = ok ? 3000 : Math.min(delay * 2, 30000);
+      }
+      if (!stopped) timer = setTimeout(tick, delay);
+    };
+    tick();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [refresh]);
 
   // Debounced catalogue search. Stale responses are dropped so a slow early request cannot
