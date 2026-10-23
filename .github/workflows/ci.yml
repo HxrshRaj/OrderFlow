@@ -98,6 +98,18 @@ jobs:
         run: |
           f=target/surefire-reports/testng-results.xml
           [ -f "$f" ] && echo "::notice title=api-tests::$(grep -o -m1 '<testng-results[^>]*' "$f" | tr -s ' ' | tr '\n' ' ')"
+      - name: List failed API tests
+        if: failure()
+        working-directory: api-tests
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob("target/surefire-reports/testng-results.xml"):
+              for m in ET.parse(f).getroot().iter("test-method"):
+                  if m.get("status") == "FAIL":
+                      msg = (m.findtext("exception/message") or "").strip().replace("\n", " | ")[:700]
+                      print(f"::notice title=FAIL {m.get('name')}::{msg}")
+          PY
       - name: Oversell race (15 concurrent orders for the last unit)
         run: ./scripts/e2e-oversell.sh http://localhost:8088 15
       - name: Install JMeter
