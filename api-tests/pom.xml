@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.orderflow</groupId>
+    <artifactId>api-tests</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+    <name>api-tests</name>
+    <description>
+        Black-box REST API tests for the Inventory and Order services, written with Rest Assured
+        and TestNG. They run against a live stack (docker-compose or a deployed environment) and
+        create their own uniquely named test data, so they can be re-run against a shared database.
+    </description>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <rest-assured.version>5.5.0</rest-assured.version>
+        <testng.version>7.10.2</testng.version>
+        <assertj.version>3.26.3</assertj.version>
+        <!-- Overridable: -Dorderflow.inventoryUrl=... -Dorderflow.orderUrl=... -->
+        <orderflow.inventoryUrl>http://localhost:8081</orderflow.inventoryUrl>
+        <orderflow.orderUrl>http://localhost:8080</orderflow.orderUrl>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <version>${rest-assured.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                    <systemPropertyVariables>
+                        <orderflow.inventoryUrl>${orderflow.inventoryUrl}</orderflow.inventoryUrl>
+                        <orderflow.orderUrl>${orderflow.orderUrl}</orderflow.orderUrl>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="OrderFlow API" verbose="1">
+    <test name="Inventory API">
+        <classes><class name="com.orderflow.api.InventoryApiTest"/></classes>
+    </test>
+    <test name="Order API">
+        <classes><class name="com.orderflow.api.OrderApiTest"/></classes>
+    </test>
+</suite>

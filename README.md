@@ -400,3 +400,9 @@ Java 21 · Spring Boot 3.4 · Spring Data JPA · PostgreSQL 16 · Flyway · Resi
 Apache HttpClient 5 · springdoc-openapi · JUnit 5 · Mockito · Testcontainers · WireMock ·
 React 18 · Vite · nginx · Docker Compose · Render Blueprint · Selenium WebDriver ·
 WebDriverManager · JIRA Cloud REST API · Micrometer.
+
+## API tests and load test
+
+- **`api-tests/`** (Rest Assured + TestNG): 18 black-box tests against a running stack, covering creation, duplicate SKUs, validation (RFC 7807 problem bodies), restock and over-deduction, name search incl. typo tolerance, order placement/rejection, cancel and ship effects on stock, state-transition conflicts and listing order. Each test creates its own uniquely named data. Run: `docker compose up -d --build --wait` then `cd api-tests && mvn test` (override URLs with `-Dorderflow.inventoryUrl=... -Dorderflow.orderUrl=...`).
+- **`perf/orderflow-load.jmx`** (Apache JMeter): 20 virtual shoppers for 40 s running search, item lookup, order placement and order history with 200 ms think time. `perf/check_results.py` fails the build if the error rate exceeds 1%, any endpoint's p95 exceeds 2000 ms, or fewer than 200 samples were produced. Limits are loose on purpose because CI runners are small and shared; they catch regressions, not absolute capacity. Do not read the CI numbers as production capacity.
+- Both run in the `system-tests` CI job together with `scripts/e2e-oversell.sh`; the JMeter HTML report is uploaded as an artifact.
