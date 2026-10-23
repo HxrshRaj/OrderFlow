@@ -97,7 +97,7 @@ jobs:
         working-directory: api-tests
         run: |
           f=target/surefire-reports/testng-results.xml
-          [ -f "$f" ] && echo "::notice title=api-tests::$(grep -o -m1 '<testng-results[^>]*' "$f" | tr -s ' ' | tr '\n' ' ')"
+          if [ -f "$f" ]; then echo "::notice title=api-tests::$(grep -o -m1 '<testng-results[^>]*' "$f" | tr -s ' ' | tr '\n' ' ')"; fi
       - name: List failed API tests
         if: failure()
         working-directory: api-tests
@@ -111,7 +111,7 @@ jobs:
                       print(f"::notice title=FAIL {m.get('name')}::{msg}")
           PY
       - name: Oversell race (15 concurrent orders for the last unit)
-        run: ./scripts/e2e-oversell.sh http://localhost:8088 15
+        run: bash scripts/e2e-oversell.sh http://localhost:8088 15
       - name: Install JMeter
         run: |
           curl -fsSL https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz -o jmeter.tgz
@@ -126,7 +126,7 @@ jobs:
       - name: Surface load-test summary
         if: always()
         run: |
-          [ -f perf-summary.txt ] && echo "::notice title=jmeter::$(tr '\n' ';' < perf-summary.txt)"
+          if [ -f perf-summary.txt ]; then echo "::notice title=jmeter::$(tr '\n' ';' < perf-summary.txt)"; fi
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
