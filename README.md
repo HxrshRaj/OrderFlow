@@ -368,6 +368,29 @@ Two storefront features added on top of the order system: finding products, and 
 - Search covers product names and SKUs only. It is not a general search engine (no synonyms, categories, or relevance learning).
 - Prices still live in the storefront's small price list; the added catalogue items fall back to a default price.
 
+## Frontend accessibility and responsive layout
+
+`frontend/a11y/audit.mjs` loads the built app in headless Chromium with a mocked API and runs **axe-core**
+(WCAG 2.0/2.1 A and AA rules) at a 1280px desktop width and a 360px phone width. It also checks that every
+interactive element can be reached with the Tab key, has a visible focus indicator, and that the page does not
+scroll horizontally. CI runs it on every change (`npm run a11y`).
+
+The first run found real problems, which are now fixed:
+
+| Finding | Fix |
+|---|---|
+| 3 quantity inputs had no accessible name (axe `label`, critical) | `aria-label` naming the product on quantity inputs, restock, add, ship and cancel buttons |
+| Footer text failed colour contrast (axe `color-contrast`, serious) | Darker muted text colour |
+| Page scrolled horizontally by 91px at 360px width | Table in a scrollable, keyboard-focusable region; grid children can shrink; phone layout rules |
+| No landmarks or skip link; errors not announced | `<main>`, "Skip to catalogue" link, `role="alert"` on errors, `role="status"` on search results, table caption and column scopes |
+| No visible focus style | `:focus-visible` outline; 32px minimum control height |
+
+Before: 2 axe violations (5 problems in total) across the two widths. After: 0 axe violations, 13 of 13 interactive
+elements reachable by keyboard, no horizontal overflow at 360px.
+
+Limits: this is an automated audit of one page against a mocked API. Automated rules find only part of the
+WCAG issues, so it is not a conformance claim, and no screen-reader or user testing was done.
+
 ## Layout
 
 ```

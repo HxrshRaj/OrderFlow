@@ -161,6 +161,7 @@ export default function App() {
 
   return (
     <div className="page">
+      <a className="skip-link" href="#main">Skip to catalogue</a>
       <header>
         <h1>OrderFlow</h1>
         <label>
@@ -174,14 +175,14 @@ export default function App() {
       </header>
 
       {error && (
-        <div className="error" data-testid="error-banner">
+        <div className="error" role="alert" data-testid="error-banner">
           {error}
         </div>
       )}
 
-      <div className="columns">
-        <section>
-          <h2>Catalogue</h2>
+      <main id="main" className="columns" tabIndex={-1}>
+        <section aria-labelledby="catalogue-heading">
+          <h2 id="catalogue-heading">Catalogue</h2>
           <input
             className="search"
             type="search"
@@ -192,7 +193,7 @@ export default function App() {
             onChange={(e) => setQuery(e.target.value)}
           />
           {searchResults && (
-            <p className="muted" data-testid="search-summary">
+            <p className="muted" role="status" data-testid="search-summary">
               {searchResults.length} result{searchResults.length === 1 ? '' : 's'} for &ldquo;
               {query.trim()}&rdquo;, best match first
             </p>
@@ -207,7 +208,11 @@ export default function App() {
                       {r.item.name} <code>{r.sku}</code>
                       {r.reason === 'POPULAR' && <em className="muted"> &middot; popular</em>}
                     </span>
-                    <button className="secondary" onClick={() => setQty(r.sku, (cart[r.sku] || 0) + 1)}>
+                    <button
+                      className="secondary"
+                      aria-label={`Add ${r.item.name} to order`}
+                      onClick={() => setQty(r.sku, (cart[r.sku] || 0) + 1)}
+                    >
                       Add
                     </button>
                   </li>
@@ -215,14 +220,16 @@ export default function App() {
               </ul>
             </div>
           )}
+          <div className="table-wrap" role="region" aria-label="Product catalogue table" tabIndex={0}>
           <table>
+            <caption className="sr-only">Products with price, available and reserved stock, and order quantity</caption>
             <thead>
               <tr>
-                <th>Product</th>
-                <th className="num">Price</th>
-                <th className="num">Available</th>
-                <th className="num">Reserved</th>
-                <th className="num">Order qty</th>
+                <th scope="col">Product</th>
+                <th scope="col" className="num">Price</th>
+                <th scope="col" className="num">Available</th>
+                <th scope="col" className="num">Reserved</th>
+                <th scope="col" className="num">Order qty</th>
               </tr>
             </thead>
             <tbody>
@@ -238,6 +245,7 @@ export default function App() {
                     <button
                       className="link"
                       title="Restock +5"
+                      aria-label={`Restock ${item.name} by 5`}
                       data-testid={`restock-${item.sku}`}
                       onClick={() => act(() => api.restock(item.sku, 5))}
                     >
@@ -248,6 +256,7 @@ export default function App() {
                   <td className="num">
                     <input
                       type="number"
+                      aria-label={`Order quantity for ${item.name}`}
                       min="0"
                       max={item.availableQuantity}
                       data-testid={`qty-input-${item.sku}`}
@@ -259,6 +268,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <div className="cart">
             <span>
@@ -276,10 +286,10 @@ export default function App() {
 
         </section>
 
-        <section>
-          <h2>Orders</h2>
+        <section aria-labelledby="orders-heading">
+          <h2 id="orders-heading">Orders</h2>
           {orders.length === 0 && <p className="muted">No orders yet for this customer.</p>}
-          <ul className="orders" data-testid="orders-list">
+          <ul className="orders" aria-label="Orders" data-testid="orders-list">
             {orders.map((o) => (
               <li key={o.orderNumber} data-testid={`order-${o.orderNumber}`}>
                 <div className="order-head">
@@ -306,6 +316,7 @@ export default function App() {
                     <button
                       data-testid="ship-btn"
                       disabled={busy}
+                      aria-label={`Ship order ${o.orderNumber}`}
                       onClick={() => act(() => api.shipOrder(o.orderNumber))}
                     >
                       Ship
@@ -316,6 +327,7 @@ export default function App() {
                       data-testid="cancel-btn"
                       disabled={busy}
                       className="secondary"
+                      aria-label={`Cancel order ${o.orderNumber}`}
                       onClick={() => act(() => api.cancelOrder(o.orderNumber))}
                     >
                       Cancel
@@ -326,7 +338,7 @@ export default function App() {
             ))}
           </ul>
         </section>
-      </div>
+      </main>
 
       <footer className="muted">
         Auto-refreshing every 3s. Try ordering the last unit of “Collector Edition” from two

@@ -76,6 +76,12 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      - name: Install Chromium for the accessibility audit
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Accessibility audit (axe-core, keyboard, 360px width)
+        run: npm run a11y
+        working-directory: frontend
 
   system-tests:
     # Black-box tests against the real stack: docker-compose brings up both services, both
