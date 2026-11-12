@@ -1,7 +1,10 @@
 package com.orderflow.inventory.service;
 
 import com.orderflow.inventory.domain.InventoryItem;
+import com.orderflow.inventory.cache.NoopSkuCache;
+import com.orderflow.inventory.cache.SkuCache;
 import com.orderflow.inventory.repository.InventoryItemRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -34,10 +37,21 @@ public class InventoryService {
     private final InventoryItemRepository repository;
     private final TransactionTemplate txTemplate;
     private final int adjustMaxRetries;
+    private final SkuCache cache;
 
+    /** Without a cache (unit tests): every read goes to the database. */
     public InventoryService(InventoryItemRepository repository,
                             PlatformTransactionManager transactionManager,
-                            @Value("${inventory.reservation.adjust-max-retries:3}") int adjustMaxRetries) {
+                            int adjustMaxRetries) {
+        this(repository, transactionManager, adjustMaxRetries, new NoopSkuCache());
+    }
+
+    @Autowired
+    public InventoryService(InventoryItemRepository repository,
+                            PlatformTransactionManager transactionManager,
+                            @Value("${inventory.reservation.adjust-max-retries:3}") int adjustMaxRetries,
+                            SkuCache cache) {
+        this.cache = cache;
         this.repository = repository;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.adjustMaxRetries = Math.max(1, adjustMaxRetries);
@@ -70,6 +84,18 @@ public class InventoryService {
                 .orElseThrow(() -> new InventoryItemNotFoundException(sku)));
     }
 
+    /**
+     * Cache-aside read of one item: Redis first (when enabled), then PostgreSQL, populating the
+     * cache on a miss. A missing SKU is never cached, so it still throws 404 on every call.
+     */
+    public ItemSnapshot getItem(String sku) {
+        return cache.get(sku).orElseGet(() -> {
+            ItemSnapshot fresh = ItemSnapshot.from(getBySku(sku));
+            cache.put(fresh);
+            return fresh;
+        });
+    }
+
     public InventoryItem create(String sku, String name, int quantity) {
         return txTemplate.execute(status -> {
             repository.findBySku(sku).ifPresent(existing -> {
@@ -86,7 +112,7 @@ public class InventoryService {
     public InventoryItem adjustStock(String sku, int delta) {
         for (int attempt = 1; ; attempt++) {
             try {
-                return txTemplate.execute(status -> {
+                InventoryItem adjusted = txTemplate.execute(status -> {
                     InventoryItem item = repository.findBySku(sku)
                             .orElseThrow(() -> new InventoryItemNotFoundException(sku));
                     item.applyDelta(delta);
@@ -94,6 +120,8 @@ public class InventoryService {
                     // retryable failure rather than at commit time.
                     return repository.saveAndFlush(item);
                 });
+                cache.evict(sku); // after commit: the transaction template has already returned
+                return adjusted;
             } catch (ObjectOptimisticLockingFailureException conflict) {
                 if (attempt >= adjustMaxRetries) {
                     throw new ConcurrentAdjustmentException(sku, attempt);

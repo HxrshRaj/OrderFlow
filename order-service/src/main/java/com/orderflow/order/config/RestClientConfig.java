@@ -39,6 +39,7 @@ public class RestClientConfig {
                 .build();
         return RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestInterceptor(new RequestIdPropagationInterceptor())
                 .requestFactory(new HttpComponentsClientHttpRequestFactory(httpClient))
                 .build();
     }

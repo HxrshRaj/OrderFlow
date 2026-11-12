@@ -1,6 +1,7 @@
 package com.orderflow.inventory.web.dto;
 
 import com.orderflow.inventory.domain.InventoryItem;
+import com.orderflow.inventory.service.ItemSnapshot;
 
 import java.time.Instant;
 
@@ -20,5 +21,15 @@ public record InventoryItemResponse(
                 item.getReservedQuantity(),
                 item.getAvailableQuantity() + item.getReservedQuantity(),
                 item.getUpdatedAt());
+    }
+
+    public static InventoryItemResponse from(ItemSnapshot item) {
+        return new InventoryItemResponse(
+                item.sku(),
+                item.name(),
+                item.availableQuantity(),
+                item.reservedQuantity(),
+                item.availableQuantity() + item.reservedQuantity(),
+                item.updatedAt());
     }
 }
