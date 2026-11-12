@@ -72,7 +72,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,circuitbreakers
+        include: health,info,circuitbreakers,prometheus
   endpoint:
     health:
       probes:
@@ -80,5 +80,7 @@ management:
       show-details: always
 
 logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
   level:
     com.orderflow.order: DEBUG

@@ -51,7 +51,7 @@ public class InventoryController {
     @GetMapping("/{sku}")
     @Operation(summary = "Get one stock item by SKU")
     public InventoryItemResponse get(@PathVariable String sku) {
-        return InventoryItemResponse.from(inventoryService.getBySku(sku));
+        return InventoryItemResponse.from(inventoryService.getItem(sku));
     }
 
     @PostMapping

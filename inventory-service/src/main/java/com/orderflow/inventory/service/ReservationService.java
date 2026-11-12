@@ -1,13 +1,17 @@
 package com.orderflow.inventory.service;
 
+import com.orderflow.inventory.cache.CacheEvictions;
 import com.orderflow.inventory.domain.InventoryItem;
 import com.orderflow.inventory.domain.Reservation;
 import com.orderflow.inventory.domain.ReservationLine;
 import com.orderflow.inventory.domain.ReservationStatus;
 import com.orderflow.inventory.repository.InventoryItemRepository;
 import com.orderflow.inventory.repository.ReservationRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -54,11 +58,27 @@ public class ReservationService {
     private final InventoryItemRepository inventoryItemRepository;
     private final Clock clock;
     private final Duration ttl;
+    private final CacheEvictions evictions;
+    private final MeterRegistry meters;
 
+    /** Without cache or metrics wiring (unit tests). */
     public ReservationService(ReservationRepository reservationRepository,
                               InventoryItemRepository inventoryItemRepository,
                               Clock clock,
-                              @Value("${inventory.reservation.ttl:PT15M}") Duration ttl) {
+                              Duration ttl) {
+        this(reservationRepository, inventoryItemRepository, clock, ttl,
+                new CacheEvictions(new com.orderflow.inventory.cache.NoopSkuCache()), new SimpleMeterRegistry());
+    }
+
+    @Autowired
+    public ReservationService(ReservationRepository reservationRepository,
+                              InventoryItemRepository inventoryItemRepository,
+                              Clock clock,
+                              @Value("${inventory.reservation.ttl:PT15M}") Duration ttl,
+                              CacheEvictions evictions,
+                              MeterRegistry meters) {
+        this.evictions = evictions;
+        this.meters = meters;
         this.reservationRepository = reservationRepository;
         this.inventoryItemRepository = inventoryItemRepository;
         this.clock = clock;
@@ -107,10 +127,13 @@ public class ReservationService {
         // 3. All-or-nothing.
         if (!shortfalls.isEmpty()) {
             log.debug("reservation {} rejected: {}", reservationId, shortfalls);
+            outcome("rejected");
             throw new InsufficientStockException(reservationId, shortfalls);
         }
 
         log.debug("reservation {} confirmed for {} line(s)", reservationId, quantityBySku.size());
+        evictions.afterCommit(quantityBySku.keySet());
+        outcome("confirmed");
         return reservation;
     }
 
@@ -136,6 +159,8 @@ public class ReservationService {
             }
         }
         reservation.markCommitted();
+        evictions.afterCommit(skusOf(reservation));
+        outcome("committed");
         return reservationRepository.save(reservation);
     }
 
@@ -154,6 +179,7 @@ public class ReservationService {
 
         releaseLines(reservation);
         reservation.markReleased();
+        outcome("released");
         return reservationRepository.save(reservation);
     }
 
@@ -177,6 +203,7 @@ public class ReservationService {
             releaseLines(reservation);
             reservation.markReleased();
             reservationRepository.save(reservation);
+            outcome("expired");
         }
         if (!expired.isEmpty()) {
             log.info("expiry sweep released {} reservation(s)", expired.size());
@@ -188,6 +215,15 @@ public class ReservationService {
         for (ReservationLine line : reservation.getLines()) {
             inventoryItemRepository.releaseReservation(line.getSku(), line.getQuantity());
         }
+        evictions.afterCommit(skusOf(reservation));
+    }
+
+    private static List<String> skusOf(Reservation reservation) {
+        return reservation.getLines().stream().map(ReservationLine::getSku).toList();
+    }
+
+    private void outcome(String outcome) {
+        meters.counter("inventory.reservations", "outcome", outcome).increment();
     }
 
     private Shortfall shortfallFor(String sku, int requested) {

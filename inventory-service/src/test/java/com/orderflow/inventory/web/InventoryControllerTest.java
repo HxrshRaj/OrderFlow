@@ -86,7 +86,7 @@ class InventoryControllerTest {
 
     @Test
     void get_unknown_sku_returns_404() throws Exception {
-        when(inventoryService.getBySku("ghost")).thenThrow(new InventoryItemNotFoundException("ghost"));
+        when(inventoryService.getItem("ghost")).thenThrow(new InventoryItemNotFoundException("ghost"));
 
         mockMvc.perform(get("/api/v1/inventory/{sku}", "ghost"))
                 .andExpect(status().isNotFound())

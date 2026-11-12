@@ -391,6 +391,24 @@ elements reachable by keyboard, no horizontal overflow at 360px.
 Limits: this is an automated audit of one page against a mocked API. Automated rules find only part of the
 WCAG issues, so it is not a conformance claim, and no screen-reader or user testing was done.
 
+## Caching, correlation ids and metrics
+
+Added to make the services look like something you would run, not just test.
+
+**Redis read cache (Inventory Service).** `GET /api/v1/inventory/{sku}` is cache-aside: Redis first, then PostgreSQL, and the result is cached as JSON for `inventory.cache.ttl` (default 10 s). It is **off by default** (`INVENTORY_CACHE_ENABLED=false`), so the service still runs on PostgreSQL alone, which is how the Render deployment runs. `docker compose up` starts Redis and turns it on.
+
+- *Invalidation:* a restock/adjust evicts the SKU after it commits; reserve, commit, release and the expiry sweep evict the affected SKUs **after their transaction commits** (a `TransactionSynchronization`), so a read cannot re-cache the old row mid-write.
+- *Failure mode:* every Redis error (down, slow, corrupt value) is caught, counted and logged, and the read falls back to PostgreSQL. Redis timeouts are 200 ms so a sick cache cannot make reads slower than the database. Redis is deliberately excluded from the readiness check for the same reason.
+- *Not cached:* stock **reservation** never reads the cache. It stays on the atomic conditional `UPDATE` described above, so the cache cannot cause overselling. A cached quantity can be up to one TTL stale if an eviction is ever missed; that is the trade-off for cheap reads of the catalogue.
+
+**Correlation ids.** Both services accept or create an `X-Request-Id` (only `[A-Za-z0-9._-]{1,64}` is reused, anything else is replaced to prevent log injection), put it in the logging MDC (`%X{requestId}` in the log pattern) and return it on the response. The Order Service forwards it to the Inventory Service, so one order can be followed through both services' logs.
+
+**Metrics.** `/actuator/prometheus` on both services (Micrometer). Custom meters: `inventory.cache.requests{result=hit|miss|error}` and `inventory.reservations{outcome=confirmed|rejected|committed|released|expired}`, next to the standard JVM, HTTP and Hikari metrics.
+
+**Tests.** Unit tests for the cache logic, Redis failure handling, post-commit eviction, the request-id filter, the id propagation and reservation metrics. `RedisSkuCacheIT` runs against a real Redis (CI service container, or Testcontainers locally) and covers round-trip, TTL expiry and an unreachable Redis.
+
+**Honest limits.** No load test was run with the cache on, so there are no hit-rate or latency numbers. `/actuator/prometheus` is exposed without auth, as for a demo; put it behind a network rule in production. Prometheus and Grafana are not part of the compose file.
+
 ## Layout
 
 ```

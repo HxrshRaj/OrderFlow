@@ -14,6 +14,13 @@ spring:
     hikari:
       pool-name: inventory-pool
       maximum-pool-size: 16
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Fail fast: a slow Redis must never make a read slower than the database it fronts.
+      timeout: 200ms
+      connect-timeout: 200ms
   jpa:
     hibernate:
       ddl-auto: validate
@@ -26,6 +33,11 @@ spring:
     locations: classpath:db/migration
 
 inventory:
+  cache:
+    # Off by default so the service runs with PostgreSQL alone (e.g. the Render deployment).
+    enabled: ${INVENTORY_CACHE_ENABLED:false}
+    # Upper bound on staleness if an invalidation is ever missed.
+    ttl: PT10S
   reservation:
     # How long a CONFIRMED (but not yet committed) hold survives before the sweeper releases it.
     ttl: PT15M
@@ -42,15 +54,21 @@ springdoc:
     path: /v3/api-docs
 
 management:
+  health:
+    redis:
+      # The cache is optional and degrades to PostgreSQL, so Redis must not affect readiness.
+      enabled: false
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
         enabled: true
 
 logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
   level:
     com.orderflow.inventory: DEBUG
