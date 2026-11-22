@@ -164,6 +164,15 @@ between them, and a real refactor on top of them:
   purpose — stated honestly, not dressed up as cross-service messaging OrderFlow doesn't have
   — and is consumed by a Micrometer counter (`orderflow.orders.shipped`) that neither `Order`
   nor `OrderService` has any reference to, proven end-to-end in `OrderFlowIT`.
+- **A second domain event, `OrderConfirmed`**, same shape: recorded by `Order.confirm()`,
+  published only `AFTER_COMMIT`, consumed by something that neither `Order` nor `OrderService`
+  knows exists — in this case `storage.ReceiptStorageListener`, which builds a JSON receipt
+  (`storage.ReceiptJson`, a pure function, unit-tested with no Spring context at all) and hands
+  it to `storage.ReceiptStorageService`, a real AWS S3 `putObject` call via the AWS SDK v2.
+  `ReceiptStorageServiceTest` verifies the S3 interaction with a Mockito-mocked `S3Client` — no
+  AWS account, no network, no Docker needed to verify it. The bucket
+  (`orderflow.receipts.bucket`) is unset by default, so the service is a documented no-op until
+  it's configured — an S3 outage was a deliberate non-goal to let break order confirmation.
 
 ---
 

@@ -1,5 +1,6 @@
 package com.orderflow.order.domain;
 
+import com.orderflow.order.domain.event.OrderConfirmed;
 import com.orderflow.order.domain.event.OrderShipped;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -132,6 +133,7 @@ public class Order {
         requireStatus(OrderStatus.PLACED, "confirm");
         this.status = OrderStatus.CONFIRMED;
         this.rejectionReason = null;
+        domainEvents.add(new OrderConfirmed(orderNumber, reservationId, customerId, totalAmount));
     }
 
     public void reject(String reason) {
